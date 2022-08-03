@@ -35,6 +35,10 @@ bcc -ansi -c -o shell.o shell.c
 ld86 -o shell -d shell.o userlib.o lib.o # link userlib to shell
 ./loadfile shell
 
+# compile texteditor.c, link object files, and copy executable file to the disk
+bcc -ansi -c -o texteditor.o texteditor.c
+ld86 -o texteditor -d texteditor.o userlib.o lib.o
+./loadfile texteditor
 
 # Copy boatload program to sector 0 of floppya.img disk image
 dd if=bootload of=floppya.img bs=512 count=1 conv=notrunc seek=0

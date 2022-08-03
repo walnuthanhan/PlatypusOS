@@ -12,6 +12,9 @@ void printInt(int intToPrint);
 int readfile(char *filename, char *buf);
 int executeProgram(char* name, int segment);
 void terminate();
+int writeSector(char *buffer, int sector);
+int deleteFile(char *fname);
+int writeFile(char *fname, char *buffer, int sectors);
 
 typedef char byte;
 
@@ -25,26 +28,184 @@ struct directory {
 };
 
 main(){
-	char buffer[13312];
+	char buf[1024];
+	int i;
+
 	makeInterrupt21();
-/*
-	interrupt(0x21, 0x03, "messag\0", buffer, 0);
-	interrupt(0x21, 0x00, buffer, 0, 0);
-*/
-/*
-	interrupt(0x21, 0x04, "uprog1\0", 0x2000, 0);
-	interrupt(0x21, 0x00, "Done!\n\r\0", 0, 0);
-*/
-/*
-	interrupt(0x21, 0x04, "uprog2\0", 0x2000, 0);
-	interrupt(0x21, 0x00, "Done!\n\r\0", 0, 0);
-*/
+	/*
+	char * buffer = "testphamhoangvu";
+	writeSector(buffer, 2879);
+	*/
+	/*
+	deleteFile("messag\0");
+	interrupt(0x21, 0x07, "uprog1\0", 0, 0);
+	*/
 	
+	
+	//readfile("shell\0", buf);
+	//writeFile("taylors\0", buf, 2);	
+	//interrupt(0x21, 0x08, "messag\0", buf, 2);
+
 	interrupt(0x21, 0x04, "shell\0", 0x2000, 0);
+
 	// while loop
 	while(1){
 	}
 
+}
+
+/*Write the number of sectors indicated by parameter sectors from buffer into filename indicated by fname
+Input: file name to write into, buffer, number of sectors written
+Output: if all sectors are written, return 1; if there are no sector to write, return -1; if there are not enough sectors to write, return -2
+*/
+int writeFile(char *fname, char *buffer, int sectors) {
+	struct directory diskDir;
+	char diskMap[512];
+	int i;
+	int j;
+	int entry = -1;
+	int answer;
+	int emptySector = -1;
+
+	//Delete file in case there is a file with the same name to override later
+	deleteFile(fname);
+	
+	if (sectors > 26) {
+		sectors = 26;
+	}
+	answer = sectors;
+	
+	readSector(&diskMap, 1);
+	readSector(&diskDir, 2);
+
+	//Go through 16 entries in the directory
+	for (i=0; i<16; i++){
+		//Go through first byte to get empty file name
+		if (!diskDir.entries[i].name[0]) {
+			entry = i;
+			break;		
+		}			
+	}
+	
+	//If no entry available in disk directory
+	if (entry == -1) {
+		return -1;
+	}
+
+	//Put 0x00 into the name of the found entry
+	for (i=0; i<6; i++) {
+		diskDir.entries[entry].name[i] = 0x00;
+	}
+
+	//Put the file name that we want to write into the name of the above entry
+	for (i=0; i<6; i++) {
+		if (fname[i] == '\0'){
+			break;
+		}
+		diskDir.entries[entry].name[i] = fname[i];
+	}	
+	//Set all of the sector to blank
+	for(i=0;i<26;i++){
+		diskDir.entries[entry].sectors[i] = 0x00;
+	}
+
+	//Find empty sector and write into that sector until we reach the number of sectors to write or 26
+	for(i=0;i<sectors;i++){
+		emptySector = -1;
+		for(j=0;j<512;j++){
+			//Find empty sector
+			if(diskMap[j] == 0x00){
+				emptySector = j;
+				break;
+			}
+		}
+		//If no sector found
+		if (emptySector == -1){
+			answer=-2;
+			break;
+		}
+		//Mark empty sector as used
+		diskMap[emptySector] = 0xFF;
+		//Write the number of empty sector into the place sector used
+		diskDir.entries[entry].sectors[i] = emptySector;
+		//Write into sector
+		writeSector(buffer, emptySector);
+		buffer = buffer + 512;
+	}	
+
+	writeSector(diskMap, 1);
+	writeSector(&diskDir, 2);
+
+	return answer;
+}
+
+/*Delete a file
+Input: file name
+output: file removed from disk directory and return 1; if there is no file found, return -1
+*/
+int deleteFile(char *fname){
+	struct directory diskDir;
+	char diskMap[512];
+	int i;
+	int j;
+	int entry = -1;
+	
+	readSector(&diskMap, 1);
+	readSector(&diskDir, 2);
+	
+	//Go through 16 entries in the directory
+	for (i=0; i<16; i++){
+		//Go through 6 first bytes to compare file name
+		for (j=0; j<6; j++){
+			//If a character of file name does not match, break
+			if (diskDir.entries[i].name[j] != fname[j]) {
+				break;
+			}
+			//If all 6 character in the file name match, get entry number
+			if (j==5){
+				entry = i;
+			}
+		}	
+	}
+	
+	//If file not found
+	if (entry == -1) {
+		return -1;
+	}
+
+	//Modify diskMap
+	for (i=0; i<26; i++) {
+		j = diskDir.entries[entry].sectors[i];
+		if (j == 0x00){
+			break;
+		}
+		diskMap[j] = 0x00;
+	}
+
+	//Modify diskDir
+	diskDir.entries[entry].name[0] = 0x00;
+	
+	writeSector(diskMap, 1);
+	writeSector(&diskDir, 2);
+
+	return 1;
+}
+
+/*
+Write from buffer to a disk sector
+Input: buffer, sector
+Ouput: buffer content written into the disk sector indicated
+*/
+int writeSector(char * buffer, int sector){
+	int ax = 0x03 * 256 + 0x01;
+	int relSector = modFunc(sector, 18) + 1;
+	int head = modFunc(sector / 18, 2);
+	int track = sector / 36;
+	int cx = track * 256 + relSector;
+	int dx = head * 256 + 0x00;
+	int bx = buffer;
+	interrupt(0x13, ax, bx, cx, dx);
+	return 1;
 }
 
 /*
@@ -113,6 +274,10 @@ int readfile(char *filename, char *buf) {
 		//Go through 6 first bytes to compare file name
 
 		for (j=0; j<6; j++){
+			if(filename[j] == 0x00){
+				entry = i;
+				break;
+			}
 			//If a character of file name does not match, break
 			if (diskDir.entries[i].name[j] != filename[j]) {
 				break;
@@ -311,6 +476,22 @@ int handleInterrupt21(int ax, int bx, int cx, int dx){
 	}
 	if (ax == 0x05){
 		terminate();
+	}
+	if (ax == 0x07){
+		b = bx;
+		return deleteFile(b);
+	}
+	if (ax == 0x08){
+		b=bx;
+		return writeFile(b, cx, dx);
+	}
+	if (ax == 0xAB){
+		printInt(bx);
+		return 1;
+	}
+	if (ax == 0xAC){
+		b=bx;
+		return readSector(b,cx);
 	}
 	return -1;
 }
