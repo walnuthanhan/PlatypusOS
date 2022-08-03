@@ -1,0 +1,37 @@
+bcc:+:
+bcc:Config:bcclib:Library of bcc helper functions
+bios:+:
+bios:Config:bios:Minimal syscalls for BIOS level
+conio:+:
+conio:Config:conio:Console io functions for BIOS and DOS.
+error:+:
+error:Config:error:Unix error functions
+getent:+:
+getent:Config:getent:Managment for /etc/passwd /etc/group /etc/utmp
+gnu_i386:Config:gnu386:Linux-i386 system call routines GCC
+gtermcap:+:
+gtermcap:Config:gtermcap:GNU termcap routines
+i386fp:+:
+i386fp:Config:386fp:Bcc 386 floating point
+i386sys:+:
+i386sys:Config:sys386:Linux-i386 system call routines
+kinclude:+:
+kinclude:Config:kinc:Example kernel include files and syscall.dat
+malloc:+:
+malloc:Config:malloc:Malloc routines
+misc:+:
+misc:Config:misc:Various unix lib functions
+msdos:+:
+msdos:Config:msdos:Msdos system calls
+regexp:+:
+regexp:Config:regexp:Regular expression lib
+stdio:+:
+stdio:Config:stdio:Stdio package
+string:+:
+string:Config:string:String and memory manipulation
+syscall:+:
+syscall:Config:syscall:Linux-8086 system call routines
+termios:+:
+termios:Config:termios:Termios functions 
+time:+:
+time:Config:time:Unix time manipulation functions.
