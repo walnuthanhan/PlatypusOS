@@ -1,5 +1,12 @@
 # PlatypusOS
 
+- [I. Introduction](#i-introduction)
+- [II. Setup Process](#ii-setup-process)
+- [III. User commands supported](#iii-user-commands-supported)
+- [IV. Bugs &amp; Limitations](#iv-bugs--amp--limitations)
+- [V. Implementation](#v-implementation)
+- [VI. Conclusion](#vi-conclusion)
+
 ## I. Introduction
 
 **PlatypusOS** is a simple 16-bit operating system implemented by Vu Pham and Han Trinh as part of the COMP 354, Operating System class at Dickinson College. The operating system tries to mimic the basic functionalities of many popular OS. PlatypusOS contains a shell program with a command line interface and a simple text editor program, which can be run through the shell. This operation system can also implement simple functions, such as: print output strings and integers to the screen, read users&#39; keyboard inputs, read data from a disk sector, write data to a disk sector, execute a program, terminate a program as well as read, write, and delete files. Moreover, users can copy a file and list all existing files on the disk through the shell command line program. This project also allows programs to be run concurrently using round-robin scheduling algorithms – functionalities such as memory management, time-sharing, and process management are implemented to make sure multiprogramming run smoothly. Through the shell command lines, users can see a list of all the processes currently running or kill a running process
