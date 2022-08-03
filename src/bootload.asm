@@ -1,5 +1,5 @@
 ;bootload.asm
-;Michael Black
+;Michael Black, 2007
 ;
 ;This is a simple bootloader that loads and executes a kernel at sector 3
 

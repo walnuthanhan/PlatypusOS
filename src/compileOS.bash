@@ -6,6 +6,36 @@ nasm bootload.asm
 # Create disk images filled with all 0's
 dd if=/dev/zero of=floppya.img bs=512 count=2880
 
+# Add disk map and disk directory to disk image
+dd if=map.img of=floppya.img bs=512 count=1 seek=1 conv=notrunc
+dd if=dir.img of=floppya.img bs=512 count=1 seek=2 conv=notrunc
+
+# Compile loadFile.c
+gcc -o loadFile loadFile.c 
+
+# Use loadFile to copy message.txt
+./loadFile message.txt
+
+# compile userlib.c
+bcc -ansi -c -o userlib.o userlib.c
+
+# Assemble lib.asm, compile uprog1.c, link object files, and copy executable file to the disk
+as86 lib.asm -o lib.o
+bcc -ansi -c -o uprog1.o uprog1.c
+ld86 -o uprog1 -d uprog1.o lib.o
+./loadfile uprog1
+
+# compile uprog2.c, link object files, and copy executable file to the disk
+bcc -ansi -c -o uprog2.o uprog2.c
+ld86 -o uprog2 -d uprog2.o lib.o
+./loadfile uprog2
+
+# compile shell.c, link object files, and copy executable file to the disk
+bcc -ansi -c -o shell.o shell.c
+ld86 -o shell -d shell.o userlib.o lib.o # link userlib to shell
+./loadfile shell
+
+
 # Copy boatload program to sector 0 of floppya.img disk image
 dd if=bootload of=floppya.img bs=512 count=1 conv=notrunc seek=0
 

@@ -1,12 +1,16 @@
 ;kernel.asm
-;Michael Black
+;Michael Black, 2007
 
 ;kernel.asm contains assembly functions that you can use in your kernel
 
 	.global _putInMemory
 	.global _interrupt
 	.global _makeInterrupt21
+	.global _launchProgram
 	.extern _handleInterrupt21
+	.global _setKernelDataSegment
+	.global _restoreDataSegment
+	.global _resetSegments
 
 ;void putInMemory (int segment, int address, char character)
 _putInMemory:
@@ -28,7 +32,7 @@ _interrupt:
 	mov bp,sp
 	mov ax,[bp+4]	;get the interrupt number in AL
 	push ds		;use self-modifying code to call the right interrupt
-	mov bx,cs
+	mov bx,cs	;make data seg same as code seg so we can self modify (GWB)
 	mov ds,bx
 	mov si,#intr
 	mov [si+1],al	;change the 00 below to the contents of AL
@@ -74,7 +78,7 @@ _interrupt21ServiceRoutine:
 	push ax
 	call _handleInterrupt21
 
-	;GWB: Modification here to allow handleInterrupt21 to 
+        ;GWB: Modification here to allow handleInterrupt21 to 
 	;     return an int value via the ax register.
 	;pop ax
 	pop bx  ; pop pushed ax to discard and leave rv in ax.
@@ -83,3 +87,54 @@ _interrupt21ServiceRoutine:
 	pop cx
 	pop dx
 	iret
+
+;this is called to start a program that is loaded into memory
+;void launchProgram(int segment)
+_launchProgram:
+	mov bp,sp
+	mov bx,[bp+2]	;get the segment into bx
+
+	mov ax,cs	;modify the jmp below to jump to our segment
+	mov ds,ax	;this is self-modifying code
+	mov si,#jump
+	mov [si+3],bx	;change the first 0000 to the segment
+
+	mov ds,bx	;set up the segment registers
+	mov ss,bx
+	mov es,bx
+
+	mov sp,#0xfff0	;set up the stack pointer
+	mov bp,#0xfff0
+
+jump:	jmp #0x0000:0x0000	;and start running (the first 0000 is changed above)
+
+;void setKernelDataSegment()
+;sets the data segment to the kernel, saving the current ds on the stack
+_setKernelDataSegment:
+        pop bx
+        push ds
+        push bx
+        mov ax,#0x1000
+        mov ds,ax
+        ret
+
+;void restoreDataSegment()
+;restores the data segment
+_restoreDataSegment:
+        pop bx
+        pop ds
+        push bx
+        ret
+
+;void resetSegments()
+;resets the data, stack and execution segments
+;to the kernel segment at 0x1000
+_resetSegments:
+	pop bx
+	mov ax,#0x1000
+	mov ds,ax
+	mov ss,ax
+	mov es,ax
+	push bx
+	ret
+
