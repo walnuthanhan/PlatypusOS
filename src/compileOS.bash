@@ -1,6 +1,7 @@
 #!/bin/bash
 
 source ../PathSetter.bash
+nasm bootload.asm
 
 # Create disk images filled with all 0's
 dd if=/dev/zero of=floppya.img bs=512 count=2880
@@ -19,6 +20,9 @@ ld86 -o kernel -d kernel.o kernel_asm.o
 
 # Copy kernel file to sector 3
 dd if=kernel of=floppya.img bs=512 conv=notrunc seek=3
+
+# Copy message.txt to sector 30 of the disk
+dd if=message.txt of=floppya.img bs=512 count=1 conv=notrunc seek=30
 
 # Booting bochs
 bochs -f opsys.bxrc
