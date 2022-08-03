@@ -19,6 +19,9 @@ gcc -o loadFile loadFile.c
 # compile userlib.c
 bcc -ansi -c -o userlib.o userlib.c
 
+#compile proc.c
+bcc -ansi -c -o proc.o proc.c
+
 # Assemble lib.asm, compile uprog1.c, link object files, and copy executable file to the disk
 as86 lib.asm -o lib.o
 bcc -ansi -c -o uprog1.o uprog1.c
@@ -35,10 +38,23 @@ bcc -ansi -c -o shell.o shell.c
 ld86 -o shell -d shell.o userlib.o lib.o # link userlib to shell
 ./loadfile shell
 
+bcc -ansi -c –o uprog6.o uprog6.c
+ld86 -o uprog6 -d uprog6.o lib.o userlib.o
+./loadfile uprog6
+
+
+bcc -ansi -c –o uprog7.o uprog7.c
+ld86 -o uprog7 -d uprog7.o lib.o userlib.o
+./loadfile uprog7
+
 # compile texteditor.c, link object files, and copy executable file to the disk
 bcc -ansi -c -o texteditor.o texteditor.c
 ld86 -o texteditor -d texteditor.o userlib.o lib.o
 ./loadfile texteditor
+
+bcc -ansi -c -o uprog3.o uprog3.c
+ld86 -o uprog3 -d uprog3.o userlib.o lib.o
+./loadfile uprog3
 
 # Copy boatload program to sector 0 of floppya.img disk image
 dd if=bootload of=floppya.img bs=512 count=1 conv=notrunc seek=0
@@ -50,7 +66,7 @@ bcc -ansi -c -o kernel.o kernel.c
 as86 kernel.asm -o kernel_asm.o
 
 # Link kernel.o and kernel_asm.o files into executable kernel file
-ld86 -o kernel -d kernel.o kernel_asm.o
+ld86 -o kernel -d kernel.o kernel_asm.o proc.o
 
 # Copy kernel file to sector 3
 dd if=kernel of=floppya.img bs=512 conv=notrunc seek=3

@@ -12,7 +12,21 @@ struct directory {
 	struct dirEntry entries[16];
 };
 
+int restoreFile(char *fname){
+  return interrupt(0x21, 0xCC, fname, 0, 0);
+}
 
+void yield(){
+	interrupt(0x21, 0x09, 0, 0, 0);
+}
+
+void showProcesses(){
+	interrupt(0x21, 0x0A, 0, 0, 0);
+}
+
+int kill(int segment){
+	return interrupt(0x21, 0x0B, segment, 0, 0);
+}
 
 void printInt(int intToPrint){
 	interrupt(0x21, 0xAB, intToPrint, 0, 0);
@@ -81,8 +95,8 @@ int readfile(char *filename, char *buf){
 	return interrupt(0x21, 0x03, filename, buf, 0);
 }
 
-int executeProgram(char* name, int segment) {
-	return interrupt(0x21, 0x04, name, segment, 0);
+int executeProgram(char* name) {
+	return interrupt(0x21, 0x04, name, 0, 0);
 }
 
 void terminate() {

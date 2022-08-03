@@ -1,3 +1,6 @@
+#define MAIN
+#include "proc.h"
+
 // declare functions
 int printString(char *str);
 int readChar();
@@ -10,11 +13,18 @@ int modFunc(int a, int b);
 int handleInterrupt21(int ax, int bx, int cx, int dx);
 void printInt(int intToPrint);
 int readfile(char *filename, char *buf);
-int executeProgram(char* name, int segment);
+//int executeProgram(char* name, int segment);
+int executeProgram(char* name);
 void terminate();
 int writeSector(char *buffer, int sector);
 int deleteFile(char *fname);
 int writeFile(char *fname, char *buffer, int sectors);
+void handleTimerInterrupt(int segment, int stackPointer);
+void kStrCopy(char *src, char *dest, int len);
+void yield();
+void showProcesses();
+int kill(int segment);
+int restoreFile(char *fname);
 
 typedef char byte;
 
@@ -28,32 +38,246 @@ struct directory {
 };
 
 main(){
-	char buf[1024];
-	int i;
-
-	makeInterrupt21();
-	/*
-	char * buffer = "testphamhoangvu";
-	writeSector(buffer, 2879);
-	*/
-	/*
-	deleteFile("messag\0");
-	interrupt(0x21, 0x07, "uprog1\0", 0, 0);
-	*/
+  	//char buf[1024];
+	//int i;
+	initializeProcStructures();
 	
-	
-	//readfile("shell\0", buf);
-	//writeFile("taylors\0", buf, 2);	
-	//interrupt(0x21, 0x08, "messag\0", buf, 2);
+        makeInterrupt21();
 
-	interrupt(0x21, 0x04, "shell\0", 0x2000, 0);
+	//	interrupt(0x21, 0x04, "shell\0", 0, 0);
+	executeProgram("shell\0");
+	makeTimerInterrupt();
 
 	// while loop
 	while(1){
 	}
-
 }
 
+/**
+Restore deleted file. Because the first character is 0x00, so we only check for the next 5 characters, if it matches, then we assume that's the file user is looking for
+RETURN -1 if not found, 1 if success, -2 if the file is not overwritten in the disk dictionary, but the file's sector is already overwritten
+ */
+int restoreFile(char *fname){
+	struct directory diskDir;
+	char diskMap[512];
+	int i;
+	int j;
+	int entry = -1;
+	char first = fname[0];
+	fname[0] = 0x00;
+	
+	readSector(&diskMap, 1);
+	readSector(&diskDir, 2);
+	
+	//Go through 16 entries in the directory
+	for (i=0; i<16; i++){
+		//Go through 6 bytes to compare file name
+		for (j=0; j<6; j++){
+			//If a character of file name does not match, break
+			if (diskDir.entries[i].name[j] != fname[j]) {
+				break;
+			}
+			//If all 6 character in the file name match, get entry number
+			if (j==5){
+				entry = i;
+			}
+		}	
+	}
+	
+	//If file not found
+	if (entry == -1) {
+		return -1;
+	}
+
+	// check if sector is overwrite or not
+	for (i=0; i<26; i++) {
+		j = diskDir.entries[entry].sectors[i];
+		if (j == 0x00){
+			break;
+		}
+		if(diskMap[j] == 0xFF){
+		  return -2;
+		}
+	}
+
+	//Modify diskMap
+	for (i=0; i<26; i++) {
+		j = diskDir.entries[entry].sectors[i];
+		if (j == 0x00){
+			break;
+		}
+		diskMap[j] = 0xFF;
+	}
+
+	//Modify diskDir
+	diskDir.entries[entry].name[0] = first;
+	
+	writeSector(diskMap, 1);
+	writeSector(&diskDir, 2);
+
+	return 1;
+}
+
+int kill(int segment){
+	struct PCB *curPCB;
+	int i;
+	int seg = 0x2000+segment*0x1000;
+	
+	setKernelDataSegment();
+	curPCB = &pcbPool[segment];
+
+	if(memoryMap[segment] == FREE){
+		restoreDataSegment();
+		return -1;
+	}
+	
+	releaseMemorySegment(seg);
+	for(i=0;i<8;i++){
+		curPCB = &pcbPool[i];
+		if(curPCB->segment == seg){
+			releasePCB(curPCB);
+		}
+	}
+	restoreDataSegment();
+	return 1;
+}
+
+void showProcesses(){
+	struct PCB *curPCB;
+	int i;
+
+	setKernelDataSegment();
+
+	for(i=0; i<8; i++){
+	  	if(memoryMap[i] == USED){
+			curPCB = &pcbPool[i];
+			printString(curPCB->name);
+			printString(", \0");
+			restoreDataSegment();
+			printInt(i);
+			setKernelDataSegment();
+			printString("\n\r\0");
+			
+		}
+	}
+	
+	restoreDataSegment();
+}
+
+void yield(){
+	interrupt(0x08, 0, 0, 0, 0);
+}
+
+/*
+Execute program based on file name
+Input: file name, segment where the program is executed
+Output: -1 if program not found, -2 if segment is not valid
+*/
+int executeProgram(char* name){
+	int segment;
+	struct PCB *pcb;
+	char buffer[13312];
+	int resultReadFile = 0;
+	int i = 0;
+	int offset = 0x0000;
+		
+	setKernelDataSegment();
+	segment = getFreeMemorySegment();
+	restoreDataSegment();
+
+	// check segment being used is valid
+	if (segment == NO_FREE_SEGMENTS){
+		return -2;
+	}
+
+	resultReadFile = readfile(name, buffer);
+
+	//File not found
+	if(resultReadFile == -1) {
+		return -1;
+	}
+
+	//Put file content in memory to launch program
+	for(i=0;i<13312;i++){
+		putInMemory(segment, offset, buffer[i]);
+		offset += 1;
+	}
+
+	setKernelDataSegment();
+	pcb = getFreePCB();
+	pcb->segment = segment;
+	pcb->state = READY;
+	pcb->stackPointer = 0xFF00;
+	addToReady(pcb);
+	restoreDataSegment();
+		
+	kStrCopy(name, pcb->name, 6);
+	
+	initializeProgram(segment);
+
+	return 1;
+}
+
+
+void handleTimerInterrupt(int segment, int stackPointer) {
+	struct PCB *pcbHead;
+	int runningSegment;
+	int runningStackPointer;
+	//printString("Tic");
+	
+	setKernelDataSegment();
+	if(running->state != DEFUNCT){
+		running->stackPointer = stackPointer;
+		running->state = READY;
+		running->segment = segment;
+		addToReady(running);
+	}
+	pcbHead = removeFromReady();
+	
+	if(pcbHead == NULL){
+		running = &idleProc;
+	} else {
+		running = pcbHead;
+	}
+	running->state = RUNNING;
+	runningSegment = running->segment;
+	runningStackPointer = running->stackPointer;
+	restoreDataSegment();
+	returnFromTimer(runningSegment, runningStackPointer);
+}
+
+/*
+Terminate program
+Output: program terminated, print "I'm back!" and run shell again
+*/
+void terminate(){
+
+	setKernelDataSegment();
+	releaseMemorySegment(running->segment);
+	releasePCB(running);
+	running->state = DEFUNCT;
+	restoreDataSegment();
+
+	while(1){
+	}
+	
+}
+
+/* kStrCopy(char *src, char *dest, int len) copy at most len
+* characters from src which is addressed relative to the current
+* data segment into dest which is addressed relative to the
+* kernel's data segment (0x1000).
+*/
+void kStrCopy(char *src, char *dest, int len) {
+	int i=0;
+	for (i=0; i<len; i++) {
+		putInMemory(0x1000, dest+i, src[i]);
+		if (src[i] == 0x00) {
+			return;
+		}
+	}
+}
+	
 /*Write the number of sectors indicated by parameter sectors from buffer into filename indicated by fname
 Input: file name to write into, buffer, number of sectors written
 Output: if all sectors are written, return 1; if there are no sector to write, return -1; if there are not enough sectors to write, return -2
@@ -212,18 +436,20 @@ int writeSector(char * buffer, int sector){
 Terminate program
 Output: program terminated, print "I'm back!" and run shell again
 */
-void terminate(){
+/*void terminate(){
 	resetSegments();
 	printString("I'm back!\n\r\0");
 	//Run shell again
-	executeProgram("shell\0", 0x2000);
-}
+	//executeProgram("shell\0", 0x2000);
+	executeProgram("shell\0");
+}*/
 
 /*
 Execute program based on file name
 Input: file name, segment where the program is executed
 Output: -1 if program not found, -2 if segment is not valid
 */
+/*
 int executeProgram(char* name, int segment){
 	char buffer[13312];
 	int resultReadFile = 0;
@@ -251,6 +477,7 @@ int executeProgram(char* name, int segment){
 	launchProgram(segment);
 
 }
+*/
 
 /*
 Load and print a file
@@ -472,7 +699,7 @@ int handleInterrupt21(int ax, int bx, int cx, int dx){
 	}
 	if (ax == 0x04){
 		b = bx;
-		return executeProgram(b, cx);
+		return executeProgram(b);
 	}
 	if (ax == 0x05){
 		terminate();
@@ -485,6 +712,15 @@ int handleInterrupt21(int ax, int bx, int cx, int dx){
 		b=bx;
 		return writeFile(b, cx, dx);
 	}
+	if (ax==0x09){
+		yield();
+	}
+	if (ax==0x0A){
+		showProcesses();
+	}	
+	if (ax==0x0B){
+		return kill(bx);
+	}
 	if (ax == 0xAB){
 		printInt(bx);
 		return 1;
@@ -492,6 +728,10 @@ int handleInterrupt21(int ax, int bx, int cx, int dx){
 	if (ax == 0xAC){
 		b=bx;
 		return readSector(b,cx);
+	}
+	if (ax == 0xCC){
+	  b = bx;
+	  return restoreFile(b);
 	}
 	return -1;
 }

@@ -13,6 +13,8 @@ main(){
 	char file[13312];
 	char spaceString[2];
 
+	enableInterrupts();
+
 	ch1[1] = '\0';
 	ch2[1] = '\0';
 
